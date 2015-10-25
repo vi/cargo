@@ -46,7 +46,7 @@ pub fn execute(options: Options, config: &Config) -> CliResult<Option<()>> {
         name: flag_name.as_ref().map(|s| s.as_ref()),
     };
 
-    ops::new(opts, config).map(|_| None).map_err(|err| {
+    ops::init(opts, config).map(|_| None).map_err(|err| {
         CliError::from_boxed(err, 101)
     })
 }

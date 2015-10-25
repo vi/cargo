@@ -17,6 +17,7 @@ use toml;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum VersionControl { Git, Hg, NoVcs }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct NewOptions<'a> {
     pub version_control: Option<VersionControl>,
     pub bin: bool,
@@ -77,7 +78,51 @@ pub fn new(opts: NewOptions, config: &Config) -> CargoResult<()> {
         return Err(human(&format!("Invalid character `{}` in crate name: `{}`",
                                   c, name)));
     }
-    mk(config, &path, name, &opts).chain_error(|| {
+    mk(config, &path, name, &opts, true).chain_error(|| {
+        human(format!("Failed to create project `{}` at `{}`",
+                      name, path.display()))
+    })
+}
+
+pub fn init(opts: NewOptions, config: &Config) -> CargoResult<()> {
+    assert_eq!(opts.path, ".");
+    let path = config.cwd().join(opts.path);
+    
+    let cargotoml_path = path.join("Cargo.toml");
+    if fs::metadata(&cargotoml_path).is_ok() {
+        return Err(human(format!("Destination `{}` already exists",
+                                 cargotoml_path.display())))
+    }
+    let name = match opts.name {
+        Some(name) => name,
+        None => {
+            let dir_name = try!(path.file_name().and_then(|s| s.to_str()).chain_error(|| {
+                human(&format!("cannot create a project with a non-unicode name: {:?}",
+                               path.file_name().unwrap()))
+            }));
+            if opts.bin {
+                dir_name
+            } else {
+                let new_name = strip_rust_affixes(dir_name);
+                if new_name != dir_name {
+                    let message = format!(
+                        "note: package will be named `{}`; use --name to override",
+                        new_name);
+                    try!(config.shell().say(&message, BLACK));
+                }
+                new_name
+            }
+        }
+    };
+    for c in name.chars() {
+        if c.is_alphanumeric() { continue }
+        if c == '_' || c == '-' { continue }
+        return Err(human(&format!("Invalid character `{}` in crate name: `{}`",
+                                  c, name)));
+    }
+    let mut newopts = opts.clone();
+    newopts.version_control = Some(VersionControl::NoVcs);
+    mk(config, &path, name, &newopts, false).chain_error(|| {
         human(format!("Failed to create project `{}` at `{}`",
                       name, path.display()))
     })
@@ -102,7 +147,7 @@ fn existing_vcs_repo(path: &Path) -> bool {
 }
 
 fn mk(config: &Config, path: &Path, name: &str,
-      opts: &NewOptions) -> CargoResult<()> {
+      opts: &NewOptions, need_to_create_directory: bool) -> CargoResult<()> {
     let cfg = try!(global_config(config));
     let mut ignore = "target\n".to_string();
     let in_existing_vcs_repo = existing_vcs_repo(path.parent().unwrap());
@@ -127,7 +172,9 @@ fn mk(config: &Config, path: &Path, name: &str,
             try!(paths::write(&path.join(".hgignore"), ignore.as_bytes()));
         },
         VersionControl::NoVcs => {
-            try!(fs::create_dir(path));
+            if need_to_create_directory {
+                try!(fs::create_dir(path));
+            }
         },
     };
 
