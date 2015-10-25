@@ -45,21 +45,16 @@ struct CargoNewConfig {
     version_control: Option<VersionControl>,
 }
 
-pub fn new(opts: NewOptions, config: &Config) -> CargoResult<()> {
-    let path = config.cwd().join(opts.path);
-    if fs::metadata(&path).is_ok() {
-        return Err(human(format!("Destination `{}` already exists",
-                                 path.display())))
-    }
-    let name = match opts.name {
-        Some(name) => name,
+fn get_name<'a>(path: &'a Path, opts: &'a NewOptions, config: &Config) -> CargoResult<&'a str> {
+    match opts.name {
+        Some(name) => Ok(name),
         None => {
             let dir_name = try!(path.file_name().and_then(|s| s.to_str()).chain_error(|| {
                 human(&format!("cannot create a project with a non-unicode name: {:?}",
                                path.file_name().unwrap()))
             }));
             if opts.bin {
-                dir_name
+                Ok(dir_name)
             } else {
                 let new_name = strip_rust_affixes(dir_name);
                 if new_name != dir_name {
@@ -68,16 +63,32 @@ pub fn new(opts: NewOptions, config: &Config) -> CargoResult<()> {
                         new_name);
                     try!(config.shell().say(&message, BLACK));
                 }
-                new_name
+                Ok(new_name)
             }
         }
-    };
+    }
+}
+
+fn check_name(name: &str) -> CargoResult<()> {
     for c in name.chars() {
         if c.is_alphanumeric() { continue }
         if c == '_' || c == '-' { continue }
         return Err(human(&format!("Invalid character `{}` in crate name: `{}`",
                                   c, name)));
     }
+    Ok(())
+}
+
+pub fn new(opts: NewOptions, config: &Config) -> CargoResult<()> {
+    let path = config.cwd().join(opts.path);
+    if fs::metadata(&path).is_ok() {
+        return Err(human(format!("Destination `{}` already exists",
+                                 path.display())))
+    }
+    
+    let name = try!(get_name(&path, &opts, config));
+    try!(check_name(name));
+    
     mk(config, &path, name, &opts).chain_error(|| {
         human(format!("Failed to create project `{}` at `{}`",
                       name, path.display()))
@@ -93,33 +104,9 @@ pub fn init(opts: NewOptions, config: &Config) -> CargoResult<()> {
         return Err(human(format!("Destination `{}` already exists",
                                  cargotoml_path.display())))
     }
-    let name = match opts.name {
-        Some(name) => name,
-        None => {
-            let dir_name = try!(path.file_name().and_then(|s| s.to_str()).chain_error(|| {
-                human(&format!("cannot create a project with a non-unicode name: {:?}",
-                               path.file_name().unwrap()))
-            }));
-            if opts.bin {
-                dir_name
-            } else {
-                let new_name = strip_rust_affixes(dir_name);
-                if new_name != dir_name {
-                    let message = format!(
-                        "note: package will be named `{}`; use --name to override",
-                        new_name);
-                    try!(config.shell().say(&message, BLACK));
-                }
-                new_name
-            }
-        }
-    };
-    for c in name.chars() {
-        if c.is_alphanumeric() { continue }
-        if c == '_' || c == '-' { continue }
-        return Err(human(&format!("Invalid character `{}` in crate name: `{}`",
-                                  c, name)));
-    }
+    
+    let name = try!(get_name(&path, &opts, config));
+    try!(check_name(name));
     
     let mut opts2 = opts.clone();
     
