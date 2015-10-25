@@ -89,12 +89,21 @@ pub fn write(path: &Path, contents: &[u8]) -> CargoResult<()> {
 }
 
 pub fn write_if_not_exists(path: &Path, contents: &[u8]) -> CargoResult<()> {
-    if metadata(&path).map(|x| x.is_file()).unwrap_or(false) {
-        // destination file already exists
+    if file_already_exists(path) {
         Ok(())
     } else {
         write(path, contents)
     }
+}
+
+pub fn file_already_exists(path: &Path) -> bool {
+    // On error just returns false, expecting subsequent creation attempt to fail and deliver proper error message
+    metadata(&path).map(|x| x.is_file()).unwrap_or(false)
+}
+
+pub fn directory_already_exists(path: &Path) -> bool {
+    // On error just returns false, expecting subsequent creation attempt to fail and deliver proper error message
+    metadata(&path).map(|x| x.is_dir()).unwrap_or(false)
 }
 
 #[cfg(unix)]
