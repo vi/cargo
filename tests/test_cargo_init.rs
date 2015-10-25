@@ -1,3 +1,4 @@
+#![allow(unused_imports)]
 use std::fs::{self, File};
 use std::io::prelude::*;
 use std::env;
@@ -38,14 +39,16 @@ test!(simple_lib {
 });
 
 test!(simple_bin {
-    assert_that(cargo_process("init").arg("--bin")
-                                    .env("USER", "foo"),
+    let path = paths::root().join("foo");
+    fs::create_dir(&path).ok();
+    assert_that(cargo_process("init").arg("--bin").arg("--vcs").arg("none")
+                                    .env("USER", "foo").cwd(&path),
                 execs().with_status(0));
 
-    assert_that(&paths::root().join("Cargo.toml"), existing_file());
-    assert_that(&paths::root().join("src/main.rs"), existing_file());
+    assert_that(&paths::root().join("foo/Cargo.toml"), existing_file());
+    assert_that(&paths::root().join("foo/src/main.rs"), existing_file());
 
-    assert_that(cargo_process("build").cwd(&paths::root().join(".")),
+    assert_that(cargo_process("build").cwd(&paths::root().join("foo")),
                 execs().with_status(0));
     assert_that(&paths::root().join(&format!("foo/target/debug/foo{}",
                                              env::consts::EXE_SUFFIX)),

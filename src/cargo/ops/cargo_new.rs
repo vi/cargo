@@ -17,7 +17,6 @@ use toml;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum VersionControl { Git, Hg, NoVcs }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct NewOptions<'a> {
     pub version_control: Option<VersionControl>,
     pub bin: bool,
@@ -120,9 +119,7 @@ pub fn init(opts: NewOptions, config: &Config) -> CargoResult<()> {
         return Err(human(&format!("Invalid character `{}` in crate name: `{}`",
                                   c, name)));
     }
-    let mut newopts = opts.clone();
-    newopts.version_control = Some(VersionControl::NoVcs);
-    mk(config, &path, name, &newopts).chain_error(|| {
+    mk(config, &path, name, &opts).chain_error(|| {
         human(format!("Failed to create project `{}` at `{}`",
                       name, path.display()))
     })
