@@ -13,12 +13,6 @@ use cargo::util::{process, ProcessBuilder};
 fn setup() {
 }
 
-fn my_process(s: &str) -> ProcessBuilder {
-    let mut p = process(s).unwrap();
-    p.cwd(&paths::root()).env("HOME", &paths::home());
-    return p;
-}
-
 fn cargo_process(s: &str) -> ProcessBuilder {
     let mut p = process(&cargo_dir().join("cargo")).unwrap();
     p.arg(s).cwd(&paths::root()).env("HOME", &paths::home());
@@ -55,12 +49,12 @@ test!(simple_bin {
                 existing_file());
 });
 
-fn bin_already_exists(explicit: bool) {
+fn bin_already_exists(explicit: bool, rellocation: &str) {
     let path = paths::root().join("foo");
     fs::create_dir(&path).ok();
     fs::create_dir(&path.join("src")).ok();
     
-    let sourcefile_path = path.join("src/main.rs");
+    let sourcefile_path = path.join(rellocation);
     
     File::create(&sourcefile_path).unwrap().write_all(br#"
         fn main() {
@@ -94,11 +88,90 @@ fn bin_already_exists(explicit: bool) {
 }
 
 test!(bin_already_exists_explicit {
-    bin_already_exists(true)
+    bin_already_exists(true, "src/main.rs")
 });
 
 test!(bin_already_exists_implicit {
-    bin_already_exists(false)
+    bin_already_exists(false, "src/main.rs")
+});
+
+test!(bin_already_exists_explicit_nosrc {
+    bin_already_exists(true, "main.rs")
+});
+
+test!(bin_already_exists_implicit_nosrc {
+    bin_already_exists(false, "main.rs")
+});
+
+test!(bin_already_exists_implicit_namenosrc {
+    bin_already_exists(false, "foo.rs")
+});
+
+test!(bin_already_exists_implicit_namesrc {
+    bin_already_exists(false, "src/foo.rs")
+});
+
+test!(confused_by_multiple_files {
+    let path = paths::root().join("foo");
+    fs::create_dir(&path).ok();
+    fs::create_dir(&path.join("src")).ok();
+    
+    let sourcefile_path1 = path.join("src/main.rs");
+    
+    File::create(&sourcefile_path1).unwrap().write_all(br#"
+        fn main () {
+            println!("Hello, world 2!");
+        }
+    "#).unwrap();
+    
+    let sourcefile_path2 = path.join("main.rs");
+    
+    File::create(&sourcefile_path2).unwrap().write_all(br#"
+        fn main () {
+            println!("Hello, world 3!");
+        }
+    "#).unwrap();
+    
+    assert_that(cargo_process("init").arg("--vcs").arg("none")
+                                    .env("USER", "foo").cwd(&path),
+                execs().with_status(101));
+    
+    assert_that(&paths::root().join("foo/Cargo.toml"), is_not(existing_file()));
+});
+
+fn lib_already_exists(rellocation: &str) {
+    let path = paths::root().join("foo");
+    fs::create_dir(&path).ok();
+    fs::create_dir(&path.join("src")).ok();
+    
+    let sourcefile_path = path.join(rellocation);
+    
+    File::create(&sourcefile_path).unwrap().write_all(br#"
+        pub fn qqq() {}
+    "#).unwrap();
+    
+    assert_that(cargo_process("init").arg("--vcs").arg("none")
+                                    .env("USER", "foo").cwd(&path),
+                execs().with_status(0));
+
+    assert_that(&paths::root().join("foo/Cargo.toml"), existing_file());
+    assert_that(&paths::root().join("foo/src/main.rs"), is_not(existing_file()));
+    
+    // Check that our file is not overwritten
+    let mut contents = String::new();
+    File::open(&sourcefile_path).unwrap().read_to_string(&mut contents).unwrap();
+    assert!(contents.contains(r#"pub fn qqq() {}"#));
+
+    assert_that(cargo_process("build").cwd(&paths::root().join("foo")),
+                execs().with_status(0));
+}
+
+test!(lib_already_exists_src {
+    lib_already_exists("src/lib.rs")
+});
+
+test!(lib_already_exists_nosrc {
+    lib_already_exists("lib.rs")
 });
 
 test!(simple_git {

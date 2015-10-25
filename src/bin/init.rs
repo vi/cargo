@@ -44,6 +44,7 @@ pub fn execute(options: Options, config: &Config) -> CliResult<Option<()>> {
         bin: flag_bin,
         path: ".",
         name: flag_name.as_ref().map(|s| s.as_ref()),
+        sourcefile_relative_path: None,
     };
 
     ops::init(opts, config).map(|_| None).map_err(|err| {

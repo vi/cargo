@@ -1,5 +1,5 @@
 use std::env;
-use std::fs;
+use std::fs::{self, File};
 use std::io::prelude::*;
 use std::path::Path;
 
@@ -17,12 +17,13 @@ use toml;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum VersionControl { Git, Hg, NoVcs }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct NewOptions<'a> {
     pub version_control: Option<VersionControl>,
     pub bin: bool,
     pub path: &'a str,
     pub name: Option<&'a str>,
+    pub sourcefile_relative_path : Option<String>,
 }
 
 impl Decodable for VersionControl {
@@ -79,6 +80,64 @@ fn check_name(name: &str) -> CargoResult<()> {
     Ok(())
 }
 
+fn detect_source_path_and_type<'a : 'b, 'b>(project_path : &Path, project_name: &str, opts2: &'b mut NewOptions) -> CargoResult<()> {
+    let path = project_path;
+    let name = project_name;
+    
+    let mut found_source_files = 0;
+    
+    if paths::file_already_exists(&path.join("src/main.rs")) {
+        opts2.bin = true;
+        opts2.sourcefile_relative_path = Some(String::from("src/main.rs"));
+        found_source_files += 1;
+    }
+    if paths::file_already_exists(&path.join("main.rs")) {
+        opts2.bin = true;
+        opts2.sourcefile_relative_path = Some(String::from("main.rs"));
+        found_source_files += 1;
+    }
+    fn autodetect_bin_file(p: &Path) -> CargoResult<bool> {
+        let mut content = String::new();
+        try!(File::open(p).and_then(|mut x| x.read_to_string(&mut content)));
+        Ok(content.contains("fn main"))
+    }
+    if paths::file_already_exists(&path.join(format!("{}.rs", name))) {
+        if opts2.bin {
+            // OK
+        } else {
+            opts2.bin = try!(autodetect_bin_file(&path.join(format!("{}.rs", name))));
+            
+        }
+        opts2.sourcefile_relative_path = Some(format!("{}.rs", name));
+        found_source_files += 1;
+    }
+    
+    if paths::file_already_exists(&path.join(format!("src/{}.rs", name))) {
+        if opts2.bin {
+            // OK
+        } else {
+            opts2.bin = try!(autodetect_bin_file(&path.join(format!("src/{}.rs", name))));
+            
+        }
+        opts2.sourcefile_relative_path = Some(format!("src/{}.rs", name));
+        found_source_files += 1;
+    }
+    
+    if (!opts2.bin) && paths::file_already_exists(&path.join("src/lib.rs")) {
+        found_source_files += 1;
+        opts2.sourcefile_relative_path = Some(String::from("src/lib.rs"));
+    }
+    if (!opts2.bin) && paths::file_already_exists(&path.join("lib.rs")) {
+        found_source_files += 1;
+        opts2.sourcefile_relative_path = Some(String::from("lib.rs"));
+    }
+    
+    if found_source_files > 1 {
+        return Err(human("There are multiple eligible source files for `cargo init`. I don't know which Cargo.toml template to use."));
+    }
+    Ok(())
+}
+
 pub fn new(opts: NewOptions, config: &Config) -> CargoResult<()> {
     let path = config.cwd().join(opts.path);
     if fs::metadata(&path).is_ok() {
@@ -110,8 +169,8 @@ pub fn init(opts: NewOptions, config: &Config) -> CargoResult<()> {
     
     let mut opts2 = opts.clone();
     
-    if paths::file_already_exists(&path.join("src/main.rs")) {
-        opts2.bin = true;
+    if opts2.sourcefile_relative_path == None {
+        try!(detect_source_path_and_type(&path, name, &mut opts2));
     }
     
     mk(config, &path, name, &opts2).chain_error(|| {
@@ -178,24 +237,56 @@ fn mk(config: &Config, path: &Path, name: &str,
         (Some(name), None, _, None) |
         (None, None, name, None) => name,
     };
+    
+    let (path_of_source_file, cargotoml_path_specifier) = match opts.sourcefile_relative_path {
+        None => if opts.bin {
+                    (path.join("src/main.rs"), String::new())
+                } else {
+                    (path.join("src/lib.rs"), String::new())
+                },
+        Some(ref src_rel_path) => {
+            let specifier = if opts.bin {
+                if src_rel_path == "src/main.rs" {
+                    String::new()
+                } else {
+                    format!(r#"
+[[bin]]
+name = "{}"
+path = {}
+"#, name, toml::Value::String(src_rel_path.clone()))
+                }
+            } else {
+                if src_rel_path == "src/lib.rs" {
+                    String::new()
+                } else {
+                    format!(r#"
+[lib]
+name = "{}"
+path = {}
+"#, name, toml::Value::String(src_rel_path.clone()))
+                }
+            };
+            (path.join(src_rel_path), specifier)
+        },
+    };
 
     try!(paths::write(&path.join("Cargo.toml"), format!(
 r#"[package]
 name = "{}"
 version = "0.1.0"
 authors = [{}]
-"#, name, toml::Value::String(author)).as_bytes()));
+{}"#, name, toml::Value::String(author), cargotoml_path_specifier).as_bytes()));
 
     try!(fs::create_dir_all(&path.join("src")));
 
     if opts.bin {
-        try!(paths::write_if_not_exists(&path.join("src/main.rs"), b"\
+        try!(paths::write_if_not_exists(&path_of_source_file, b"\
 fn main() {
     println!(\"Hello, world!\");
 }
 "));
     } else {
-        try!(paths::write_if_not_exists(&path.join("src/lib.rs"), b"\
+        try!(paths::write_if_not_exists(&path_of_source_file, b"\
 #[test]
 fn it_works() {
 }
