@@ -55,6 +55,52 @@ test!(simple_bin {
                 existing_file());
 });
 
+fn bin_already_exists(explicit: bool) {
+    let path = paths::root().join("foo");
+    fs::create_dir(&path).ok();
+    fs::create_dir(&path.join("src")).ok();
+    
+    let sourcefile_path = path.join("src/main.rs");
+    
+    File::create(&sourcefile_path).unwrap().write_all(br#"
+        fn main() {
+            println!("Hello, world 2!");
+        }
+    "#).unwrap();
+    
+    if explicit {
+        assert_that(cargo_process("init").arg("--bin").arg("--vcs").arg("none")
+                                        .env("USER", "foo").cwd(&path),
+                    execs().with_status(0));
+    } else {
+        assert_that(cargo_process("init").arg("--vcs").arg("none")
+                                        .env("USER", "foo").cwd(&path),
+                    execs().with_status(0));
+    }
+
+    assert_that(&paths::root().join("foo/Cargo.toml"), existing_file());
+    assert_that(&paths::root().join("foo/src/lib.rs"), is_not(existing_file()));
+    
+    // Check that our file is not overwritten
+    let mut contents = String::new();
+    File::open(&sourcefile_path).unwrap().read_to_string(&mut contents).unwrap();
+    assert!(contents.contains(r#"Hello, world 2!"#));
+
+    assert_that(cargo_process("build").cwd(&paths::root().join("foo")),
+                execs().with_status(0));
+    assert_that(&paths::root().join(&format!("foo/target/debug/foo{}",
+                                             env::consts::EXE_SUFFIX)),
+                existing_file());
+}
+
+test!(bin_already_exists_explicit {
+    bin_already_exists(true)
+});
+
+test!(bin_already_exists_implicit {
+    bin_already_exists(false)
+});
+
 test!(simple_git {
     assert_that(cargo_process("init").arg("--vcs").arg("git")
                                     .env("USER", "foo"),

@@ -1,6 +1,7 @@
 use std::env;
 use std::ffi::{OsStr, OsString};
 use std::fs::File;
+use std::fs::metadata;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf, Component};
 
@@ -85,6 +86,15 @@ pub fn write(path: &Path, contents: &[u8]) -> CargoResult<()> {
     }).chain_error(|| {
         internal(format!("failed to write `{}`", path.display()))
     })
+}
+
+pub fn write_if_not_exists(path: &Path, contents: &[u8]) -> CargoResult<()> {
+    if metadata(&path).map(|x| x.is_file()).unwrap_or(false) {
+        // destination file already exists
+        Ok(())
+    } else {
+        write(path, contents)
+    }
 }
 
 #[cfg(unix)]

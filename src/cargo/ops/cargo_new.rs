@@ -169,11 +169,7 @@ fn mk(config: &Config, path: &Path, name: &str,
             try!(paths::write(&path.join(".hgignore"), ignore.as_bytes()));
         },
         VersionControl::NoVcs => {
-            if fs::metadata(&path).map(|x| x.is_dir()).unwrap_or(false) {
-                // directory already exists
-            } else {
-                try!(fs::create_dir(path));
-            }
+            try!(fs::create_dir_all(path));
         },
     };
 
@@ -195,16 +191,16 @@ version = "0.1.0"
 authors = [{}]
 "#, name, toml::Value::String(author)).as_bytes()));
 
-    try!(fs::create_dir(&path.join("src")));
+    try!(fs::create_dir_all(&path.join("src")));
 
     if opts.bin {
-        try!(paths::write(&path.join("src/main.rs"), b"\
+        try!(paths::write_if_not_exists(&path.join("src/main.rs"), b"\
 fn main() {
     println!(\"Hello, world!\");
 }
 "));
     } else {
-        try!(paths::write(&path.join("src/lib.rs"), b"\
+        try!(paths::write_if_not_exists(&path.join("src/lib.rs"), b"\
 #[test]
 fn it_works() {
 }
