@@ -78,7 +78,7 @@ pub fn new(opts: NewOptions, config: &Config) -> CargoResult<()> {
         return Err(human(&format!("Invalid character `{}` in crate name: `{}`",
                                   c, name)));
     }
-    mk(config, &path, name, &opts, true).chain_error(|| {
+    mk(config, &path, name, &opts).chain_error(|| {
         human(format!("Failed to create project `{}` at `{}`",
                       name, path.display()))
     })
@@ -122,7 +122,7 @@ pub fn init(opts: NewOptions, config: &Config) -> CargoResult<()> {
     }
     let mut newopts = opts.clone();
     newopts.version_control = Some(VersionControl::NoVcs);
-    mk(config, &path, name, &newopts, false).chain_error(|| {
+    mk(config, &path, name, &newopts).chain_error(|| {
         human(format!("Failed to create project `{}` at `{}`",
                       name, path.display()))
     })
@@ -147,7 +147,7 @@ fn existing_vcs_repo(path: &Path) -> bool {
 }
 
 fn mk(config: &Config, path: &Path, name: &str,
-      opts: &NewOptions, need_to_create_directory: bool) -> CargoResult<()> {
+      opts: &NewOptions) -> CargoResult<()> {
     let cfg = try!(global_config(config));
     let mut ignore = "target\n".to_string();
     let in_existing_vcs_repo = existing_vcs_repo(path.parent().unwrap());
@@ -172,7 +172,9 @@ fn mk(config: &Config, path: &Path, name: &str,
             try!(paths::write(&path.join(".hgignore"), ignore.as_bytes()));
         },
         VersionControl::NoVcs => {
-            if need_to_create_directory {
+            if fs::metadata(&path).map(|x| x.is_dir()).unwrap_or(false) {
+                // directory already exists
+            } else {
                 try!(fs::create_dir(path));
             }
         },
