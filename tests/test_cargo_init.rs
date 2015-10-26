@@ -188,6 +188,64 @@ test!(simple_git {
                 execs().with_status(0));
 });
 
+test!(git_autodetect {
+    fs::create_dir(&paths::root().join(".git")).ok();
+    
+    assert_that(cargo_process("init")
+                                    .env("USER", "foo"),
+                execs().with_status(0));
+    
+
+    assert_that(&paths::root().join("Cargo.toml"), existing_file());
+    assert_that(&paths::root().join("src/lib.rs"), existing_file());
+    assert_that(&paths::root().join(".git"), existing_dir());
+    assert_that(&paths::root().join(".gitignore"), existing_file());
+
+    assert_that(cargo_process("build").cwd(&paths::root().join(".")),
+                execs().with_status(0));
+});
+
+
+test!(mercurial_autodetect {
+    fs::create_dir(&paths::root().join(".hg")).ok();
+    
+    assert_that(cargo_process("init")
+                                    .env("USER", "foo"),
+                execs().with_status(0));
+    
+
+    assert_that(&paths::root().join("Cargo.toml"), existing_file());
+    assert_that(&paths::root().join("src/lib.rs"), existing_file());
+    assert_that(&paths::root().join(".git"), is_not(existing_dir()));
+    assert_that(&paths::root().join(".hgignore"), existing_file());
+
+    assert_that(cargo_process("build").cwd(&paths::root().join(".")),
+                execs().with_status(0));
+});
+
+test!(gitignore_appended_not_replaced {
+    fs::create_dir(&paths::root().join(".git")).ok();
+    
+    File::create(&paths::root().join(".gitignore")).unwrap().write_all(b"qqqqqq\n").unwrap();
+    
+    assert_that(cargo_process("init")
+                                    .env("USER", "foo"),
+                execs().with_status(0));
+    
+
+    assert_that(&paths::root().join("Cargo.toml"), existing_file());
+    assert_that(&paths::root().join("src/lib.rs"), existing_file());
+    assert_that(&paths::root().join(".git"), existing_dir());
+    assert_that(&paths::root().join(".gitignore"), existing_file());
+    
+    let mut contents = String::new();
+    File::open(&paths::root().join(".gitignore")).unwrap().read_to_string(&mut contents).unwrap();
+    assert!(contents.contains(r#"qqqqq"#));
+
+    assert_that(cargo_process("build").cwd(&paths::root().join(".")),
+                execs().with_status(0));
+});
+
 test!(with_argument {
     assert_that(cargo_process("init").arg("foo"),
                 execs().with_status(1)
