@@ -80,7 +80,9 @@ fn check_name(name: &str) -> CargoResult<()> {
     Ok(())
 }
 
-fn detect_source_path_and_type<'a : 'b, 'b>(project_path : &Path, project_name: &str, opts2: &'b mut NewOptions) -> CargoResult<()> {
+fn detect_source_path_and_type<'a : 'b, 'b>(project_path : &Path, 
+                                            project_name: &str, 
+                                            opts2: &'b mut NewOptions) -> CargoResult<()> {
     let path = project_path;
     let name = project_name;
     
@@ -133,7 +135,8 @@ fn detect_source_path_and_type<'a : 'b, 'b>(project_path : &Path, project_name: 
     }
     
     if found_source_files > 1 {
-        return Err(human("There are multiple eligible source files for `cargo init`. I don't know which Cargo.toml template to use."));
+        return Err(human(r"There are multiple eligible source files for `cargo init`.
+I don't know which Cargo.toml template to use."));
     }
     Ok(())
 }
