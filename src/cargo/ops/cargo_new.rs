@@ -173,6 +173,26 @@ pub fn init(opts: NewOptions, config: &Config) -> CargoResult<()> {
         try!(detect_source_path_and_type(&path, name, &mut opts2));
     }
     
+    if opts2.version_control == None {
+        let mut num_detected_vsces = 0;
+        
+        if fs::metadata(&path.join(".git")).is_ok() {
+            opts2.version_control = Some(VersionControl::Git);
+            num_detected_vsces += 1;
+        }
+        
+        if fs::metadata(&path.join(".hg")).is_ok() {
+            opts2.version_control = Some(VersionControl::Hg);
+            num_detected_vsces += 1;
+        }
+        
+        // if none exists, maybe create git, like in `cargo new`
+        
+        if num_detected_vsces > 1 {
+            return Err(human("Both .git and .hg exist. I don't know what to choose."));
+        }
+    }
+    
     mk(config, &path, name, &opts2).chain_error(|| {
         human(format!("Failed to create project `{}` at `{}`",
                       name, path.display()))
@@ -215,12 +235,16 @@ fn mk(config: &Config, path: &Path, name: &str,
 
     match vcs {
         VersionControl::Git => {
-            try!(GitRepo::init(path));
-            try!(paths::write(&path.join(".gitignore"), ignore.as_bytes()));
+            if ! fs::metadata(&path.join(".git")).is_ok() {
+                try!(GitRepo::init(path));
+            }
+            try!(paths::append(&path.join(".gitignore"), ignore.as_bytes()));
         },
         VersionControl::Hg => {
-            try!(HgRepo::init(path));
-            try!(paths::write(&path.join(".hgignore"), ignore.as_bytes()));
+            if ! paths::directory_already_exists(&path.join(".hg")) {
+                try!(HgRepo::init(path));
+            }
+            try!(paths::append(&path.join(".hgignore"), ignore.as_bytes()));
         },
         VersionControl::NoVcs => {
             try!(fs::create_dir_all(path));
@@ -277,7 +301,9 @@ version = "0.1.0"
 authors = [{}]
 {}"#, name, toml::Value::String(author), cargotoml_path_specifier).as_bytes()));
 
-    try!(fs::create_dir_all(&path.join("src")));
+    if let Some(src_dir) = path_of_source_file.parent() {
+        try!(fs::create_dir_all(src_dir));
+    }
 
     if opts.bin {
         try!(paths::write_if_not_exists(&path_of_source_file, b"\
