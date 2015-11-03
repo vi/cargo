@@ -225,9 +225,7 @@ fn mk(config: &Config, path: &Path, name: &str,
     let cfg = try!(global_config(config));
     let mut ignore = "target\n".to_string();
     let in_existing_vcs_repo = existing_vcs_repo(path.parent().unwrap());
-    if !opts.bin {
-        ignore.push_str("Cargo.lock\n");
-    }
+    ignore.push_str("Cargo.lock\n");
 
     let vcs = match (opts.version_control, cfg.version_control, in_existing_vcs_repo) {
         (None, None, false) => VersionControl::Git,
