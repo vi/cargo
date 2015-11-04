@@ -92,7 +92,8 @@ fn check_name(name: &str) -> CargoResult<()> {
 
 fn detect_source_paths_and_types<'a : 'b, 'b>(project_path : &'a Path, 
                                             project_name: &'a str, 
-                                            detected_files: &'b mut Vec<SourceFileInformation>) -> CargoResult<()> {
+                                            detected_files: &'b mut Vec<SourceFileInformation>) 
+                                                -> CargoResult<()> {
     let path = project_path;
     let name = project_name;
     
