@@ -139,6 +139,37 @@ test!(confused_by_multiple_lib_files {
     assert_that(&paths::root().join("foo/Cargo.toml"), is_not(existing_file()));
 });
 
+
+test!(multibin_project {
+    let path = paths::root().join("foo");
+    fs::create_dir(&path).ok();
+    
+    let sourcefile_path1 = path.join("foo.rs");
+    
+    File::create(&sourcefile_path1).unwrap().write_all(br#"
+        fn main () {
+            println!("Hello, world 2!");
+        }
+    "#).unwrap();
+    
+    let sourcefile_path2 = path.join("main.rs");
+    
+    File::create(&sourcefile_path2).unwrap().write_all(br#"
+        fn main () {
+            println!("Hello, world 3!");
+        }
+    "#).unwrap();
+    
+    assert_that(cargo_process("init").arg("--vcs").arg("none")
+                                    .env("USER", "foo").cwd(&path),
+                execs().with_status(0));
+                
+    assert_that(&paths::root().join("foo/Cargo.toml"), existing_file());
+    assert_that(cargo_process("build").cwd(&paths::root().join("foo")),
+                execs().with_status(0));
+    
+});
+
 fn lib_already_exists(rellocation: &str) {
     let path = paths::root().join("foo");
     fs::create_dir(&path).ok();

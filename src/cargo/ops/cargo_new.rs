@@ -304,19 +304,28 @@ fn mk(config: &Config, opts: &MkOptions) -> CargoResult<()> {
     
     // Calculare what [lib] and [[bin]]s do we need to append to Cargo.toml
     
+    let explicit_better_than_implicit = opts.source_files.len() > 1;
+    
+    let mut bin_counter = 1;
+    
     for i in &opts.source_files {
         if i.bin {
-            if i.relative_path != "src/main.rs" {
+            if i.relative_path != "src/main.rs" || explicit_better_than_implicit {
+                let name_appendix =
+                    if bin_counter == 1 { format!(r"") }
+                    else { format!(r"{}", bin_counter)  };
+                // the user is expected to rename "myproject2" into something
+                // more meaningful after initialization.
+                        
                 cargotoml_path_specifier.push_str(&format!(r#"
 [[bin]]
-name = "{}"
+name = "{}{}"
 path = {}
-"#, name, toml::Value::String(i.relative_path.clone())));
+"#, name, name_appendix, toml::Value::String(i.relative_path.clone())));
+                bin_counter += 1;
             }
-            // What shall we do if there are multiple bins? 
-            // Auto-name as name2, name3? Fail?
         } else {
-            if i.relative_path != "src/lib.rs" {
+            if i.relative_path != "src/lib.rs" || explicit_better_than_implicit {
                 cargotoml_path_specifier.push_str(&format!(r#"
 [lib]
 name = "{}"
