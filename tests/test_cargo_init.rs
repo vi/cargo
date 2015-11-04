@@ -111,23 +111,23 @@ test!(bin_already_exists_implicit_namesrc {
     bin_already_exists(false, "src/foo.rs")
 });
 
-test!(confused_by_multiple_files {
+test!(confused_by_multiple_lib_files {
     let path = paths::root().join("foo");
     fs::create_dir(&path).ok();
     fs::create_dir(&path.join("src")).ok();
     
-    let sourcefile_path1 = path.join("src/main.rs");
+    let sourcefile_path1 = path.join("src/lib.rs");
     
     File::create(&sourcefile_path1).unwrap().write_all(br#"
-        fn main () {
+        fn qqq () {
             println!("Hello, world 2!");
         }
     "#).unwrap();
     
-    let sourcefile_path2 = path.join("main.rs");
+    let sourcefile_path2 = path.join("lib.rs");
     
     File::create(&sourcefile_path2).unwrap().write_all(br#"
-        fn main () {
+        fn qqq () {
             println!("Hello, world 3!");
         }
     "#).unwrap();

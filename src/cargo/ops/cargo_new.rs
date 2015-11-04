@@ -1,5 +1,5 @@
 use std::env;
-use std::fs::{self, File};
+use std::fs::{self};
 use std::io::prelude::*;
 use std::path::Path;
 
@@ -17,13 +17,23 @@ use toml;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum VersionControl { Git, Hg, NoVcs }
 
-#[derive(Clone, Debug, PartialEq)]
 pub struct NewOptions<'a> {
     pub version_control: Option<VersionControl>,
     pub bin: bool,
     pub path: &'a str,
     pub name: Option<&'a str>,
-    pub sourcefile_relative_path : Option<String>,
+}
+
+struct SourceFileInformation {
+    relative_path: String,
+    bin: bool,
+}
+
+struct MkOptions<'a> {
+    version_control: Option<VersionControl>,
+    path: &'a Path,
+    name: &'a str,
+    source_files: Vec<SourceFileInformation>,
 }
 
 impl Decodable for VersionControl {
@@ -47,26 +57,26 @@ struct CargoNewConfig {
 }
 
 fn get_name<'a>(path: &'a Path, opts: &'a NewOptions, config: &Config) -> CargoResult<&'a str> {
-    match opts.name {
-        Some(name) => Ok(name),
-        None => {
-            let dir_name = try!(path.file_name().and_then(|s| s.to_str()).chain_error(|| {
-                human(&format!("cannot create a project with a non-unicode name: {:?}",
-                               path.file_name().unwrap()))
-            }));
-            if opts.bin {
-                Ok(dir_name)
-            } else {
-                let new_name = strip_rust_affixes(dir_name);
-                if new_name != dir_name {
-                    let message = format!(
-                        "note: package will be named `{}`; use --name to override",
-                        new_name);
-                    try!(config.shell().say(&message, BLACK));
-                }
-                Ok(new_name)
-            }
+    if let Some(name) = opts.name {
+        return Ok(name);
+    }
+    
+    let dir_name = try!(path.file_name().and_then(|s| s.to_str()).chain_error(|| {
+        human(&format!("cannot create a project with a non-unicode name: {:?}",
+                       path.file_name().unwrap()))
+    }));
+    
+    if opts.bin {
+        Ok(dir_name)
+    } else {
+        let new_name = strip_rust_affixes(dir_name);
+        if new_name != dir_name {
+            let message = format!(
+                "note: package will be named `{}`; use --name to override",
+                new_name);
+            try!(config.shell().say(&message, BLACK));
         }
+        Ok(new_name)
     }
 }
 
@@ -80,65 +90,66 @@ fn check_name(name: &str) -> CargoResult<()> {
     Ok(())
 }
 
-fn detect_source_path_and_type<'a : 'b, 'b>(project_path : &Path, 
-                                            project_name: &str, 
-                                            opts2: &'b mut NewOptions) -> CargoResult<()> {
+fn detect_source_paths_and_types<'a : 'b, 'b>(project_path : &'a Path, 
+                                            project_name: &'a str, 
+                                            detected_files: &'b mut Vec<SourceFileInformation>) -> CargoResult<()> {
     let path = project_path;
     let name = project_name;
     
-    let mut found_source_files = 0;
+    enum H {
+        Bin,
+        Lib,
+        Detect,
+    }
     
-    if paths::file_already_exists(&path.join("src/main.rs")) {
-        opts2.bin = true;
-        opts2.sourcefile_relative_path = Some(String::from("src/main.rs"));
-        found_source_files += 1;
+    struct Test {
+        proposed_path: String,
+        handling: H,
     }
-    if paths::file_already_exists(&path.join("main.rs")) {
-        opts2.bin = true;
-        opts2.sourcefile_relative_path = Some(String::from("main.rs"));
-        found_source_files += 1;
-    }
-    fn autodetect_bin_file(p: &Path) -> CargoResult<bool> {
-        let mut content = String::new();
-        try!(File::open(p).and_then(|mut x| x.read_to_string(&mut content)));
-        Ok(content.contains("fn main"))
-    }
-    if paths::file_already_exists(&path.join(format!("{}.rs", name))) {
-        if opts2.bin {
-            // OK
-        } else {
-            opts2.bin = try!(autodetect_bin_file(&path.join(format!("{}.rs", name))));
-            
+        
+    let tests = vec![
+        Test { proposed_path: format!("src/main.rs"),     handling: H::Bin },
+        Test { proposed_path: format!("main.rs"),         handling: H::Bin },
+        Test { proposed_path: format!("src/{}.rs", name), handling: H::Detect },
+        Test { proposed_path: format!("{}.rs", name),     handling: H::Detect },
+        Test { proposed_path: format!("src/lib.rs"),      handling: H::Lib },
+        Test { proposed_path: format!("lib.rs"),          handling: H::Lib },
+    ];
+    
+    for i in tests {
+        let pp = i.proposed_path;
+        if ! paths::file_already_exists(&path.join(pp.clone())) {
+            continue;
         }
-        opts2.sourcefile_relative_path = Some(format!("{}.rs", name));
-        found_source_files += 1;
+        let sfi = match i.handling {
+            H::Bin => 
+                SourceFileInformation { relative_path: pp, bin: true },
+            H::Lib => 
+                SourceFileInformation { relative_path: pp, bin: false },
+            H::Detect => {
+                let content = try!(paths::read(&path.join(pp.clone())));
+                let isbin = content.contains("fn main");
+                SourceFileInformation { relative_path: pp, bin: isbin }
+            },
+        };
+        detected_files.push(sfi);
     }
     
-    if paths::file_already_exists(&path.join(format!("src/{}.rs", name))) {
-        if opts2.bin {
-            // OK
-        } else {
-            opts2.bin = try!(autodetect_bin_file(&path.join(format!("src/{}.rs", name))));
-            
-        }
-        opts2.sourcefile_relative_path = Some(format!("src/{}.rs", name));
-        found_source_files += 1;
-    }
-    
-    if (!opts2.bin) && paths::file_already_exists(&path.join("src/lib.rs")) {
-        found_source_files += 1;
-        opts2.sourcefile_relative_path = Some(String::from("src/lib.rs"));
-    }
-    if (!opts2.bin) && paths::file_already_exists(&path.join("lib.rs")) {
-        found_source_files += 1;
-        opts2.sourcefile_relative_path = Some(String::from("lib.rs"));
-    }
-    
-    if found_source_files > 1 {
-        return Err(human(r"There are multiple eligible source files for `cargo init`.
-I don't know which Cargo.toml template to use."));
-    }
     Ok(())
+}
+
+fn plan_new_source_file(bin: bool) -> SourceFileInformation {
+    if bin {
+        SourceFileInformation { 
+             relative_path: String::from("src/main.rs"),
+             bin: true,
+        }
+    } else {
+        SourceFileInformation {
+             relative_path: String::from("src/lib.rs"),
+             bin: false,
+        }
+    }
 }
 
 pub fn new(opts: NewOptions, config: &Config) -> CargoResult<()> {
@@ -150,8 +161,15 @@ pub fn new(opts: NewOptions, config: &Config) -> CargoResult<()> {
     
     let name = try!(get_name(&path, &opts, config));
     try!(check_name(name));
+
+    let mkopts = MkOptions {
+        version_control: opts.version_control,
+        path: &path,
+        name: name,
+        source_files: vec![plan_new_source_file(opts.bin)],
+    };
     
-    mk(config, &path, name, &opts).chain_error(|| {
+    mk(config, &mkopts).chain_error(|| {
         human(format!("Failed to create project `{}` at `{}`",
                       name, path.display()))
     })
@@ -170,22 +188,30 @@ pub fn init(opts: NewOptions, config: &Config) -> CargoResult<()> {
     let name = try!(get_name(&path, &opts, config));
     try!(check_name(name));
     
-    let mut opts2 = opts.clone();
+    let mut src_paths_types = vec![];
     
-    if opts2.sourcefile_relative_path == None {
-        try!(detect_source_path_and_type(&path, name, &mut opts2));
+    try!(detect_source_paths_and_types(&path, name, &mut src_paths_types));
+    
+    if src_paths_types.len() == 0 {
+        src_paths_types.push(plan_new_source_file(opts.bin));
+    } else {
+        // --bin option may be ignored if lib.rs or src/lib.rs present
+        // Maybe when doing `cargo init --bin` inside a library project stub,
+        // user may mean "initialize for library, but also add binary target"
     }
     
-    if opts2.version_control == None {
+    let mut version_control = opts.version_control;
+    
+    if version_control == None {
         let mut num_detected_vsces = 0;
         
         if fs::metadata(&path.join(".git")).is_ok() {
-            opts2.version_control = Some(VersionControl::Git);
+            version_control = Some(VersionControl::Git);
             num_detected_vsces += 1;
         }
         
         if fs::metadata(&path.join(".hg")).is_ok() {
-            opts2.version_control = Some(VersionControl::Hg);
+            version_control = Some(VersionControl::Hg);
             num_detected_vsces += 1;
         }
         
@@ -196,7 +222,14 @@ pub fn init(opts: NewOptions, config: &Config) -> CargoResult<()> {
         }
     }
     
-    mk(config, &path, name, &opts2).chain_error(|| {
+    let mkopts = MkOptions {
+        version_control: version_control,
+        path: &path,
+        name: name,
+        source_files: src_paths_types,
+    };
+    
+    mk(config, &mkopts).chain_error(|| {
         human(format!("Failed to create project `{}` at `{}`",
                       name, path.display()))
     })
@@ -220,8 +253,9 @@ fn existing_vcs_repo(path: &Path) -> bool {
     GitRepo::discover(path).is_ok() || HgRepo::discover(path).is_ok()
 }
 
-fn mk(config: &Config, path: &Path, name: &str,
-      opts: &NewOptions) -> CargoResult<()> {
+fn mk(config: &Config, opts: &MkOptions) -> CargoResult<()> {
+    let path = opts.path;
+    let name = opts.name;
     let cfg = try!(global_config(config));
     let mut ignore = "target\n".to_string();
     let in_existing_vcs_repo = existing_vcs_repo(path.parent().unwrap());
@@ -263,37 +297,44 @@ fn mk(config: &Config, path: &Path, name: &str,
         (None, None, name, None) => name,
     };
     
-    let (path_of_source_file, cargotoml_path_specifier) = match opts.sourcefile_relative_path {
-        None => if opts.bin {
-                    (path.join("src/main.rs"), String::new())
-                } else {
-                    (path.join("src/lib.rs"), String::new())
-                },
-        Some(ref src_rel_path) => {
-            let specifier = if opts.bin {
-                if src_rel_path == "src/main.rs" {
-                    String::new()
-                } else {
-                    format!(r#"
+    let mut cargotoml_path_specifier = String::new();
+    
+    let mut there_was_already_a_lib = false;
+    let mut previous_lib_relpath = String::new();
+    
+    // Calculare what [lib] and [[bin]]s do we need to append to Cargo.toml
+    
+    for i in &opts.source_files {
+        if i.bin {
+            if i.relative_path != "src/main.rs" {
+                cargotoml_path_specifier.push_str(&format!(r#"
 [[bin]]
 name = "{}"
 path = {}
-"#, name, toml::Value::String(src_rel_path.clone()))
-                }
-            } else {
-                if src_rel_path == "src/lib.rs" {
-                    String::new()
-                } else {
-                    format!(r#"
+"#, name, toml::Value::String(i.relative_path.clone())));
+            }
+            // What shall we do if there are multiple bins? 
+            // Auto-name as name2, name3? Fail?
+        } else {
+            if i.relative_path != "src/lib.rs" {
+                cargotoml_path_specifier.push_str(&format!(r#"
 [lib]
 name = "{}"
 path = {}
-"#, name, toml::Value::String(src_rel_path.clone()))
-                }
-            };
-            (path.join(src_rel_path), specifier)
-        },
-    };
+"#, name, toml::Value::String(i.relative_path.clone())));
+            }
+            if there_was_already_a_lib {
+                return Err(human(format!(
+                    "I confused by multiple library source files. There are both {} and {}...",
+                    previous_lib_relpath, i.relative_path)));
+            } else {
+                there_was_already_a_lib = true;
+                previous_lib_relpath = i.relative_path.clone();
+            }
+        }
+    }
+
+    // Create Cargo.toml file with necessary [lib] and [[bin]] sections, if needed
 
     try!(paths::write(&path.join("Cargo.toml"), format!(
 r#"[package]
@@ -302,22 +343,34 @@ version = "0.1.0"
 authors = [{}]
 {}"#, name, toml::Value::String(author), cargotoml_path_specifier).as_bytes()));
 
-    if let Some(src_dir) = path_of_source_file.parent() {
-        try!(fs::create_dir_all(src_dir));
-    }
+    // Create all specified source files 
+    // (with respective parent directories) 
+    // if they are don't exist
 
-    if opts.bin {
-        try!(paths::write_if_not_exists(&path_of_source_file, b"\
+    for i in &opts.source_files {
+        let path_of_source_file = path.join(i.relative_path.clone());
+        
+        if let Some(src_dir) = path_of_source_file.parent() {
+            try!(fs::create_dir_all(src_dir));
+        }
+    
+        let default_file_content : &[u8] = if i.bin {
+            b"\
 fn main() {
     println!(\"Hello, world!\");
 }
-"));
-    } else {
-        try!(paths::write_if_not_exists(&path_of_source_file, b"\
+"
+        } else {
+            b"\
 #[test]
 fn it_works() {
 }
-"));
+"
+        };
+    
+        if ! paths::file_already_exists(&path_of_source_file) {
+            return paths::write(&path_of_source_file, default_file_content)
+        }
     }
 
     Ok(())

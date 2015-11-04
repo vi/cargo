@@ -105,14 +105,6 @@ pub fn append(path: &Path, contents: &[u8]) -> CargoResult<()> {
     })
 }
 
-pub fn write_if_not_exists(path: &Path, contents: &[u8]) -> CargoResult<()> {
-    if file_already_exists(path) {
-        Ok(())
-    } else {
-        write(path, contents)
-    }
-}
-
 pub fn file_already_exists(path: &Path) -> bool {
     // On error just returns false, expecting subsequent 
     // creation attempt to fail and deliver proper error message
