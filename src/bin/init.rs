@@ -9,6 +9,7 @@ struct Options {
     flag_quiet: bool,
     flag_color: Option<String>,
     flag_bin: bool,
+    arg_path: Option<String>,
     flag_name: Option<String>,
     flag_vcs: Option<ops::VersionControl>,
 }
@@ -17,7 +18,7 @@ pub const USAGE: &'static str = "
 Create a new cargo package in current directory
 
 Usage:
-    cargo init [options]
+    cargo init [options] [<path>]
     cargo init -h | --help
 
 Options:
@@ -37,12 +38,12 @@ pub fn execute(options: Options, config: &Config) -> CliResult<Option<()>> {
     try!(config.shell().set_verbosity(options.flag_verbose, options.flag_quiet));
     try!(config.shell().set_color_config(options.flag_color.as_ref().map(|s| &s[..])));
 
-    let Options { flag_bin, flag_name, flag_vcs, .. } = options;
+    let Options { flag_bin, arg_path, flag_name, flag_vcs, .. } = options;
 
     let opts = ops::NewOptions {
         version_control: flag_vcs,
         bin: flag_bin,
-        path: ".",
+        path: &arg_path.unwrap_or(format!(".")),
         name: flag_name.as_ref().map(|s| s.as_ref()),
     };
 

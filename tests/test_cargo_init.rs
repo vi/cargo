@@ -278,15 +278,9 @@ test!(gitignore_appended_not_replaced {
 });
 
 test!(with_argument {
-    assert_that(cargo_process("init").arg("foo"),
-                execs().with_status(1)
-                       .with_stderr("\
-Invalid arguments.
-
-Usage:
-    cargo init [options]
-    cargo init -h | --help
-"));
+    assert_that(cargo_process("init").arg("foo").arg("--vcs").arg("none"),
+                execs().with_status(0));
+    assert_that(&paths::root().join("foo/Cargo.toml"), existing_file());
 });
 
 
@@ -297,7 +291,7 @@ test!(unknown_flags {
 Unknown flag: '--flag'
 
 Usage:
-    cargo init [options]
+    cargo init [options] [<path>]
     cargo init -h | --help
 "));
 });
