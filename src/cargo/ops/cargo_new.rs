@@ -1,5 +1,5 @@
 use std::env;
-use std::fs::{self};
+use std::fs;
 use std::io::prelude::*;
 use std::path::Path;
 
@@ -90,10 +90,10 @@ fn check_name(name: &str) -> CargoResult<()> {
     Ok(())
 }
 
-fn detect_source_paths_and_types<'a : 'b, 'b>(project_path : &'a Path, 
-                                            project_name: &'a str, 
-                                            detected_files: &'b mut Vec<SourceFileInformation>) 
-                                                -> CargoResult<()> {
+fn detect_source_paths_and_types(project_path : &Path, 
+                                 project_name: &str, 
+                                 detected_files: &mut Vec<SourceFileInformation>,
+                                 ) -> CargoResult<()> {
     let path = project_path;
     let name = project_name;
     
@@ -119,14 +119,16 @@ fn detect_source_paths_and_types<'a : 'b, 'b>(project_path : &'a Path,
     
     for i in tests {
         let pp = i.proposed_path;
-        if ! paths::file_already_exists(&path.join(pp.clone())) {
+        if !paths::file_already_exists(&path.join(&pp)) {
             continue;
         }
         let sfi = match i.handling {
-            H::Bin => 
-                SourceFileInformation { relative_path: pp, bin: true },
-            H::Lib => 
-                SourceFileInformation { relative_path: pp, bin: false },
+            H::Bin => {
+                SourceFileInformation { relative_path: pp, bin: true }
+            },
+            H::Lib => {
+                SourceFileInformation { relative_path: pp, bin: false }
+            },
             H::Detect => {
                 let content = try!(paths::read(&path.join(pp.clone())));
                 let isbin = content.contains("fn main");
@@ -177,7 +179,6 @@ pub fn new(opts: NewOptions, config: &Config) -> CargoResult<()> {
 }
 
 pub fn init(opts: NewOptions, config: &Config) -> CargoResult<()> {
-    assert_eq!(opts.path, ".");
     let path = config.cwd().join(opts.path);
     
     let cargotoml_path = path.join("Cargo.toml");
@@ -219,7 +220,11 @@ pub fn init(opts: NewOptions, config: &Config) -> CargoResult<()> {
         // if none exists, maybe create git, like in `cargo new`
         
         if num_detected_vsces > 1 {
-            return Err(human("Both .git and .hg exist. I don't know what to choose."));
+            return Err(human("Both .git and .hg exist. It is not recommended \
+                             to use multiple VCS'es simultaneously. \
+                             I don't know which one to choose to fill in the \
+                             respective ignore file. Specify --vcs option \
+                             to override this detection"));
         }
     }
     
@@ -335,7 +340,7 @@ path = {}
             }
             if there_was_already_a_lib {
                 return Err(human(format!(
-                    "I confused by multiple library source files. There are both {} and {}...",
+                    "Cannot have a project with multiple libraries, found both `{}` and `{}`",
                     previous_lib_relpath, i.relative_path)));
             } else {
                 there_was_already_a_lib = true;
