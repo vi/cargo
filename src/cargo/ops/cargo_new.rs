@@ -138,6 +138,22 @@ fn detect_source_paths_and_types(project_path : &Path,
         detected_files.push(sfi);
     }
     
+    // Check for duplicate lib attempt
+    
+    let mut previous_lib_relpath : Option<&str> = None;
+        
+    for i in detected_files {
+        if ! i.bin {
+            if let Some(plp) = previous_lib_relpath {
+                return Err(human(format!("Cannot have a project with \
+                                         multiple libraries, \
+                                         found both `{}` and `{}`",
+                                        plp, i.relative_path)));
+            }
+            previous_lib_relpath = Some(&i.relative_path);
+        }
+    }
+    
     Ok(())
 }
 
@@ -305,9 +321,6 @@ fn mk(config: &Config, opts: &MkOptions) -> CargoResult<()> {
     
     let mut cargotoml_path_specifier = String::new();
     
-    let mut there_was_already_a_lib = false;
-    let mut previous_lib_relpath = String::new();
-    
     // Calculare what [lib] and [[bin]]s do we need to append to Cargo.toml
     
     let explicit_better_than_implicit = opts.source_files.len() > 1;
@@ -337,14 +350,6 @@ path = {}
 name = "{}"
 path = {}
 "#, name, toml::Value::String(i.relative_path.clone())));
-            }
-            if there_was_already_a_lib {
-                return Err(human(format!(
-                    "Cannot have a project with multiple libraries, found both `{}` and `{}`",
-                    previous_lib_relpath, i.relative_path)));
-            } else {
-                there_was_already_a_lib = true;
-                previous_lib_relpath = i.relative_path.clone();
             }
         }
     }
