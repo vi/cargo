@@ -26,6 +26,7 @@ pub struct NewOptions<'a> {
 
 struct SourceFileInformation {
     relative_path: String,
+    target_name: String,
     bin: bool,
 }
 
@@ -124,15 +125,21 @@ fn detect_source_paths_and_types(project_path : &Path,
         }
         let sfi = match i.handling {
             H::Bin => {
-                SourceFileInformation { relative_path: pp, bin: true }
+                SourceFileInformation { relative_path: pp, 
+                                        target_name: String::from(project_name), 
+                                        bin: true }
             },
             H::Lib => {
-                SourceFileInformation { relative_path: pp, bin: false }
+                SourceFileInformation { relative_path: pp, 
+                                        target_name: String::from(project_name), 
+                                        bin: false }
             },
             H::Detect => {
                 let content = try!(paths::read(&path.join(pp.clone())));
                 let isbin = content.contains("fn main");
-                SourceFileInformation { relative_path: pp, bin: isbin }
+                SourceFileInformation { relative_path: pp, 
+                                        target_name: String::from(project_name), 
+                                        bin: isbin }
             },
         };
         detected_files.push(sfi);
@@ -141,9 +148,12 @@ fn detect_source_paths_and_types(project_path : &Path,
     // Check for duplicate lib attempt
     
     let mut previous_lib_relpath : Option<&str> = None;
+    let mut binary_target_names: Vec<&str> = vec![];
         
     for i in detected_files {
-        if ! i.bin {
+        if i.bin {
+            binary_target_names.push(&i.target_name);
+        } else {
             if let Some(plp) = previous_lib_relpath {
                 return Err(human(format!("Cannot have a project with \
                                          multiple libraries, \
@@ -154,18 +164,38 @@ fn detect_source_paths_and_types(project_path : &Path,
         }
     }
     
+    // Check for duplicate binary targets
+    
+    {
+        let l1 = binary_target_names.len();
+        binary_target_names.sort();
+        binary_target_names.dedup();
+        let l2 = binary_target_names.len();
+        
+        if l1 != l2 {
+            return Err(human(format!("Cannot initialize a project \
+                                      where multiple binaries share \
+                                      the guessed name. Unfortunately this \
+                                      implementation can't tell you \
+                                      which source files are involved in \
+                                      a collision.")));
+        }
+    }
+    
     Ok(())
 }
 
-fn plan_new_source_file(bin: bool) -> SourceFileInformation {
+fn plan_new_source_file(bin: bool, project_name: String) -> SourceFileInformation {
     if bin {
         SourceFileInformation { 
              relative_path: String::from("src/main.rs"),
+             target_name: project_name,
              bin: true,
         }
     } else {
         SourceFileInformation {
              relative_path: String::from("src/lib.rs"),
+             target_name: project_name,
              bin: false,
         }
     }
@@ -185,7 +215,7 @@ pub fn new(opts: NewOptions, config: &Config) -> CargoResult<()> {
         version_control: opts.version_control,
         path: &path,
         name: name,
-        source_files: vec![plan_new_source_file(opts.bin)],
+        source_files: vec![plan_new_source_file(opts.bin, String::from(name))],
     };
     
     mk(config, &mkopts).chain_error(|| {
@@ -211,7 +241,7 @@ pub fn init(opts: NewOptions, config: &Config) -> CargoResult<()> {
     try!(detect_source_paths_and_types(&path, name, &mut src_paths_types));
     
     if src_paths_types.len() == 0 {
-        src_paths_types.push(plan_new_source_file(opts.bin));
+        src_paths_types.push(plan_new_source_file(opts.bin, String::from(name)));
     } else {
         // --bin option may be ignored if lib.rs or src/lib.rs present
         // Maybe when doing `cargo init --bin` inside a library project stub,
@@ -323,33 +353,22 @@ fn mk(config: &Config, opts: &MkOptions) -> CargoResult<()> {
     
     // Calculare what [lib] and [[bin]]s do we need to append to Cargo.toml
     
-    let explicit_better_than_implicit = opts.source_files.len() > 1;
-    
-    let mut bin_counter = 1;
-    
     for i in &opts.source_files {
         if i.bin {
-            if i.relative_path != "src/main.rs" || explicit_better_than_implicit {
-                let name_appendix =
-                    if bin_counter == 1 { format!(r"") }
-                    else { format!(r"{}", bin_counter)  };
-                // the user is expected to rename "myproject2" into something
-                // more meaningful after initialization.
-                        
+            if i.relative_path != "src/main.rs" {
                 cargotoml_path_specifier.push_str(&format!(r#"
 [[bin]]
-name = "{}{}"
+name = "{}"
 path = {}
-"#, name, name_appendix, toml::Value::String(i.relative_path.clone())));
-                bin_counter += 1;
+"#, i.target_name, toml::Value::String(i.relative_path.clone())));
             }
         } else {
-            if i.relative_path != "src/lib.rs" || explicit_better_than_implicit {
+            if i.relative_path != "src/lib.rs" {
                 cargotoml_path_specifier.push_str(&format!(r#"
 [lib]
 name = "{}"
 path = {}
-"#, name, toml::Value::String(i.relative_path.clone())));
+"#, i.target_name, toml::Value::String(i.relative_path.clone())));
             }
         }
     }

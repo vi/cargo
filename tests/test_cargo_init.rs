@@ -140,7 +140,7 @@ test!(confused_by_multiple_lib_files {
 });
 
 
-test!(multibin_project {
+test!(multibin_project_name_clash {
     let path = paths::root().join("foo");
     fs::create_dir(&path).ok();
     
@@ -162,11 +162,11 @@ test!(multibin_project {
     
     assert_that(cargo_process("init").arg("--vcs").arg("none")
                                     .env("USER", "foo").cwd(&path),
-                execs().with_status(0));
+                execs().with_status(101));
                 
-    assert_that(&paths::root().join("foo/Cargo.toml"), existing_file());
-    assert_that(cargo_process("build").cwd(&paths::root().join("foo")),
-                execs().with_status(0));
+    assert_that(&paths::root().join("foo/Cargo.toml"), is_not(existing_file()));
+    //assert_that(cargo_process("build").cwd(&paths::root().join("foo")),
+    //            execs().with_status(0));
     
 });
 
