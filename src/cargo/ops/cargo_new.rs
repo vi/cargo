@@ -380,7 +380,10 @@ r#"[package]
 name = "{}"
 version = "0.1.0"
 authors = [{}]
+
+[dependencies]
 {}"#, name, toml::Value::String(author), cargotoml_path_specifier).as_bytes()));
+
 
     // Create all specified source files 
     // (with respective parent directories) 
