@@ -125,22 +125,28 @@ fn detect_source_paths_and_types(project_path : &Path,
         }
         let sfi = match i.handling {
             H::Bin => {
-                SourceFileInformation { relative_path: pp, 
-                                        target_name: String::from(project_name), 
-                                        bin: true }
-            },
+                SourceFileInformation { 
+                    relative_path: pp, 
+                    target_name: project_name.to_string(), 
+                    bin: true 
+                }
+            }
             H::Lib => {
-                SourceFileInformation { relative_path: pp, 
-                                        target_name: String::from(project_name), 
-                                        bin: false }
-            },
+                SourceFileInformation { 
+                    relative_path: pp, 
+                    target_name: project_name.to_string(), 
+                    bin: false
+                }
+            }
             H::Detect => {
                 let content = try!(paths::read(&path.join(pp.clone())));
                 let isbin = content.contains("fn main");
-                SourceFileInformation { relative_path: pp, 
-                                        target_name: String::from(project_name), 
-                                        bin: isbin }
-            },
+                SourceFileInformation { 
+                    relative_path: pp, 
+                    target_name: project_name.to_string(), 
+                    bin: isbin 
+                }
+            }
         };
         detected_files.push(sfi);
     }
@@ -148,14 +154,14 @@ fn detect_source_paths_and_types(project_path : &Path,
     // Check for duplicate lib attempt
     
     let mut previous_lib_relpath : Option<&str> = None;
-    let mut binary_target_names: Vec<&str> = vec![];
+    let mut binary_target_names = vec![];
         
     for i in detected_files {
         if i.bin {
             binary_target_names.push(&i.target_name);
         } else {
             if let Some(plp) = previous_lib_relpath {
-                return Err(human(format!("Cannot have a project with \
+                return Err(human(format!("cannot have a project with \
                                          multiple libraries, \
                                          found both `{}` and `{}`",
                                         plp, i.relative_path)));
@@ -188,13 +194,13 @@ fn detect_source_paths_and_types(project_path : &Path,
 fn plan_new_source_file(bin: bool, project_name: String) -> SourceFileInformation {
     if bin {
         SourceFileInformation { 
-             relative_path: String::from("src/main.rs"),
+             relative_path: "src/main.rs".to_string(),
              target_name: project_name,
              bin: true,
         }
     } else {
         SourceFileInformation {
-             relative_path: String::from("src/lib.rs"),
+             relative_path: "src/lib.rs".to_string(),
              target_name: project_name,
              bin: false,
         }
@@ -215,7 +221,7 @@ pub fn new(opts: NewOptions, config: &Config) -> CargoResult<()> {
         version_control: opts.version_control,
         path: &path,
         name: name,
-        source_files: vec![plan_new_source_file(opts.bin, String::from(name))],
+        source_files: vec![plan_new_source_file(opts.bin, name.to_string())],
     };
     
     mk(config, &mkopts).chain_error(|| {
@@ -241,7 +247,7 @@ pub fn init(opts: NewOptions, config: &Config) -> CargoResult<()> {
     try!(detect_source_paths_and_types(&path, name, &mut src_paths_types));
     
     if src_paths_types.len() == 0 {
-        src_paths_types.push(plan_new_source_file(opts.bin, String::from(name)));
+        src_paths_types.push(plan_new_source_file(opts.bin, name.to_string()));
     } else {
         // --bin option may be ignored if lib.rs or src/lib.rs present
         // Maybe when doing `cargo init --bin` inside a library project stub,
@@ -266,11 +272,10 @@ pub fn init(opts: NewOptions, config: &Config) -> CargoResult<()> {
         // if none exists, maybe create git, like in `cargo new`
         
         if num_detected_vsces > 1 {
-            return Err(human("Both .git and .hg exist. It is not recommended \
-                             to use multiple VCS'es simultaneously. \
-                             I don't know which one to choose to fill in the \
-                             respective ignore file. Specify --vcs option \
-                             to override this detection"));
+            return Err(human("both .git and .hg directories found \
+                              and the ignore file can't be \
+                              filled in as a result, \
+                              specify --vcs to override detection"));
         }
     }
     
@@ -322,13 +327,13 @@ fn mk(config: &Config, opts: &MkOptions) -> CargoResult<()> {
 
     match vcs {
         VersionControl::Git => {
-            if ! fs::metadata(&path.join(".git")).is_ok() {
+            if !fs::metadata(&path.join(".git")).is_ok() {
                 try!(GitRepo::init(path));
             }
             try!(paths::append(&path.join(".gitignore"), ignore.as_bytes()));
         },
         VersionControl::Hg => {
-            if ! paths::directory_already_exists(&path.join(".hg")) {
+            if !paths::directory_already_exists(&path.join(".hg")) {
                 try!(HgRepo::init(path));
             }
             try!(paths::append(&path.join(".hgignore"), ignore.as_bytes()));
@@ -410,7 +415,7 @@ fn it_works() {
 "
         };
     
-        if ! paths::file_already_exists(&path_of_source_file) {
+        if !paths::file_already_exists(&path_of_source_file) {
             return paths::write(&path_of_source_file, default_file_content)
         }
     }
