@@ -210,7 +210,7 @@ fn plan_new_source_file(bin: bool, project_name: String) -> SourceFileInformatio
 pub fn new(opts: NewOptions, config: &Config) -> CargoResult<()> {
     let path = config.cwd().join(opts.path);
     if fs::metadata(&path).is_ok() {
-        return Err(human(format!("Destination `{}` already exists",
+        return Err(human(format!("destination `{}` already exists",
                                  path.display())))
     }
     
@@ -235,7 +235,7 @@ pub fn init(opts: NewOptions, config: &Config) -> CargoResult<()> {
     
     let cargotoml_path = path.join("Cargo.toml");
     if fs::metadata(&cargotoml_path).is_ok() {
-        return Err(human(format!("Destination `{}` already exists",
+        return Err(human(format!("destination `{}` already exists",
                                  cargotoml_path.display())))
     }
     
