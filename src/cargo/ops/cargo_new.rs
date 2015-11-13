@@ -120,9 +120,12 @@ fn detect_source_paths_and_types(project_path : &Path,
     
     for i in tests {
         let pp = i.proposed_path;
-        if !paths::file_already_exists(&path.join(&pp)) {
+        
+        // path/pp does not exist or is not a file
+        if ! fs::metadata(&path.join(&pp)).map(|x| x.is_file()).unwrap_or(false) {
             continue;
         }
+        
         let sfi = match i.handling {
             H::Bin => {
                 SourceFileInformation { 
@@ -333,7 +336,7 @@ fn mk(config: &Config, opts: &MkOptions) -> CargoResult<()> {
             try!(paths::append(&path.join(".gitignore"), ignore.as_bytes()));
         },
         VersionControl::Hg => {
-            if !paths::directory_already_exists(&path.join(".hg")) {
+            if !fs::metadata(&path.join(".hg")).is_ok() {
                 try!(HgRepo::init(path));
             }
             try!(paths::append(&path.join(".hgignore"), ignore.as_bytes()));
@@ -415,7 +418,7 @@ fn it_works() {
 "
         };
     
-        if !paths::file_already_exists(&path_of_source_file) {
+        if ! fs::metadata(&path_of_source_file).map(|x| x.is_file()).unwrap_or(false) {
             return paths::write(&path_of_source_file, default_file_content)
         }
     }
