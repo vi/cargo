@@ -1,7 +1,6 @@
 use std::env;
 use std::ffi::{OsStr, OsString};
 use std::fs::File;
-use std::fs::metadata;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf, Component};
