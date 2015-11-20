@@ -309,8 +309,8 @@ fn strip_rust_affixes(name: &str) -> &str {
     name
 }
 
-fn existing_vcs_repo(path: &Path) -> bool {
-    GitRepo::discover(path).is_ok() || HgRepo::discover(path).is_ok()
+fn existing_vcs_repo(path: &Path, cwd: &Path) -> bool {
+    GitRepo::discover(path, cwd).is_ok() || HgRepo::discover(path, cwd).is_ok()
 }
 
 fn mk(config: &Config, opts: &MkOptions) -> CargoResult<()> {
@@ -318,7 +318,7 @@ fn mk(config: &Config, opts: &MkOptions) -> CargoResult<()> {
     let name = opts.name;
     let cfg = try!(global_config(config));
     let mut ignore = "target\n".to_string();
-    let in_existing_vcs_repo = existing_vcs_repo(path.parent().unwrap());
+    let in_existing_vcs_repo = existing_vcs_repo(path.parent().unwrap(), config.cwd());
     ignore.push_str("Cargo.lock\n");
 
     let vcs = match (opts.version_control, cfg.version_control, in_existing_vcs_repo) {
@@ -331,13 +331,13 @@ fn mk(config: &Config, opts: &MkOptions) -> CargoResult<()> {
     match vcs {
         VersionControl::Git => {
             if !fs::metadata(&path.join(".git")).is_ok() {
-                try!(GitRepo::init(path));
+                try!(GitRepo::init(path, config.cwd()));
             }
             try!(paths::append(&path.join(".gitignore"), ignore.as_bytes()));
         },
         VersionControl::Hg => {
             if !fs::metadata(&path.join(".hg")).is_ok() {
-                try!(HgRepo::init(path));
+                try!(HgRepo::init(path, config.cwd()));
             }
             try!(paths::append(&path.join(".hgignore"), ignore.as_bytes()));
         },
