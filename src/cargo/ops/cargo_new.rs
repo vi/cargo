@@ -85,8 +85,7 @@ fn check_name(name: &str) -> CargoResult<()> {
     for c in name.chars() {
         if c.is_alphanumeric() { continue }
         if c == '_' || c == '-' { continue }
-        return Err(human(&format!("Invalid character `{}` in crate name: `{}`",
-                                  c, name)));
+        bail!("Invalid character `{}` in crate name: `{}`", c, name)
     }
     Ok(())
 }
@@ -213,8 +212,8 @@ fn plan_new_source_file(bin: bool, project_name: String) -> SourceFileInformatio
 pub fn new(opts: NewOptions, config: &Config) -> CargoResult<()> {
     let path = config.cwd().join(opts.path);
     if fs::metadata(&path).is_ok() {
-        return Err(human(format!("destination `{}` already exists",
-                                 path.display())))
+        bail!("destination `{}` already exists",
+                                 path.display())
     }
     
     let name = try!(get_name(&path, &opts, config));
@@ -238,8 +237,8 @@ pub fn init(opts: NewOptions, config: &Config) -> CargoResult<()> {
     
     let cargotoml_path = path.join("Cargo.toml");
     if fs::metadata(&cargotoml_path).is_ok() {
-        return Err(human(format!("destination `{}` already exists",
-                                 cargotoml_path.display())))
+        bail!("destination `{}` already exists",
+                                 cargotoml_path.display())
     }
     
     let name = try!(get_name(&path, &opts, config));
@@ -275,10 +274,10 @@ pub fn init(opts: NewOptions, config: &Config) -> CargoResult<()> {
         // if none exists, maybe create git, like in `cargo new`
         
         if num_detected_vsces > 1 {
-            return Err(human("both .git and .hg directories found \
+            bail!("both .git and .hg directories found \
                               and the ignore file can't be \
                               filled in as a result, \
-                              specify --vcs to override detection"));
+                              specify --vcs to override detection");
         }
     }
     
@@ -437,8 +436,8 @@ fn discover_author() -> CargoResult<(String, Option<String>)> {
         Some(name) => name,
         None => {
             let username_var = if cfg!(windows) {"USERNAME"} else {"USER"};
-            return Err(human(format!("could not determine the current \
-                                      user, please set ${}", username_var)))
+            bail!("could not determine the current user, please set ${}",
+                  username_var)
         }
     };
     let email = git_config.and_then(|g| g.get_string("user.email").ok())
