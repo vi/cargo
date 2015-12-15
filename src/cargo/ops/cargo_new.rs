@@ -2,6 +2,7 @@ use std::env;
 use std::fs;
 use std::io::prelude::*;
 use std::path::Path;
+use std::collections::BTreeMap;
 
 use rustc_serialize::{Decodable, Decoder};
 
@@ -161,37 +162,27 @@ fn detect_source_paths_and_types(project_path : &Path,
     // Check for duplicate lib attempt
     
     let mut previous_lib_relpath : Option<&str> = None;
-    let mut binary_target_names = vec![];
+    let mut duplicates_checker : BTreeMap<&str, &SourceFileInformation> = BTreeMap::new();
         
     for i in detected_files {
         if i.bin {
-            binary_target_names.push(&i.target_name);
+            if let Some(x) = BTreeMap::get::<str>(&duplicates_checker, i.target_name.as_ref()) {
+                bail!("\
+multiple possible binary sources found:
+  {}
+  {}
+cannot automatically generate Cargo.toml as the main target would be ambiguous",
+                      &x.relative_path, &i.relative_path);
+            }
+            duplicates_checker.insert(i.target_name.as_ref(), i);
         } else {
             if let Some(plp) = previous_lib_relpath {
                 return Err(human(format!("cannot have a project with \
                                          multiple libraries, \
                                          found both `{}` and `{}`",
-                                        plp, i.relative_path)));
+                                         plp, i.relative_path)));
             }
             previous_lib_relpath = Some(&i.relative_path);
-        }
-    }
-    
-    // Check for duplicate binary targets
-    
-    {
-        let l1 = binary_target_names.len();
-        binary_target_names.sort();
-        binary_target_names.dedup();
-        let l2 = binary_target_names.len();
-        
-        if l1 != l2 {
-            return Err(human(format!("Cannot initialize a project \
-                                      where multiple binaries share \
-                                      the guessed name. Unfortunately this \
-                                      implementation can't tell you \
-                                      which source files are involved in \
-                                      a collision.")));
         }
     }
     
