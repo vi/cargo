@@ -126,7 +126,7 @@ fn detect_source_paths_and_types(project_path : &Path,
         let pp = i.proposed_path;
         
         // path/pp does not exist or is not a file
-        if ! fs::metadata(&path.join(&pp)).map(|x| x.is_file()).unwrap_or(false) {
+        if !fs::metadata(&path.join(&pp)).map(|x| x.is_file()).unwrap_or(false) {
             continue;
         }
         
@@ -218,7 +218,7 @@ pub fn new(opts: NewOptions, config: &Config) -> CargoResult<()> {
     let path = config.cwd().join(opts.path);
     if fs::metadata(&path).is_ok() {
         bail!("destination `{}` already exists",
-                                 path.display())
+              path.display())
     }
     
     let name = try!(get_name(&path, &opts, config));
