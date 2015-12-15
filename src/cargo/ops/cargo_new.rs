@@ -62,6 +62,11 @@ fn get_name<'a>(path: &'a Path, opts: &'a NewOptions, config: &Config) -> CargoR
         return Ok(name);
     }
     
+    if path.file_name().is_none() {
+        bail!("cannot auto-detect project name from path {:?} ; use --name to override",
+                              path.as_os_str());
+    }
+    
     let dir_name = try!(path.file_name().and_then(|s| s.to_str()).chain_error(|| {
         human(&format!("cannot create a project with a non-unicode name: {:?}",
                        path.file_name().unwrap()))

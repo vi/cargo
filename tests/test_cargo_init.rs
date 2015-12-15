@@ -295,3 +295,12 @@ Usage:
     cargo init -h | --help
 "));
 });
+
+
+test!(no_filename {
+    assert_that(cargo_process("init").arg("/"),
+                execs().with_status(101)
+                       .with_stderr("\
+cannot auto-detect project name from path \"/\" ; use --name to override
+"));
+});
