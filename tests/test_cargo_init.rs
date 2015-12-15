@@ -1,11 +1,8 @@
-#![allow(unused_imports)]
 use std::fs::{self, File};
 use std::io::prelude::*;
 use std::env;
-use tempdir::TempDir;
 
 use support::{execs, paths, cargo_dir};
-use support::paths::CargoPathExt;
 use hamcrest::{assert_that, existing_file, existing_dir, is_not};
 
 use cargo::util::{process, ProcessBuilder};
@@ -28,13 +25,13 @@ test!(simple_lib {
     assert_that(&paths::root().join("src/lib.rs"), existing_file());
     assert_that(&paths::root().join(".gitignore"), is_not(existing_file()));
 
-    assert_that(cargo_process("build").cwd(&paths::root().join(".")),
+    assert_that(cargo_process("build"),
                 execs().with_status(0));
 });
 
 test!(simple_bin {
     let path = paths::root().join("foo");
-    fs::create_dir(&path).ok();
+    fs::create_dir(&path).unwrap();
     assert_that(cargo_process("init").arg("--bin").arg("--vcs").arg("none")
                                     .env("USER", "foo").cwd(&path),
                 execs().with_status(0));
@@ -42,7 +39,7 @@ test!(simple_bin {
     assert_that(&paths::root().join("foo/Cargo.toml"), existing_file());
     assert_that(&paths::root().join("foo/src/main.rs"), existing_file());
 
-    assert_that(cargo_process("build").cwd(&paths::root().join("foo")),
+    assert_that(cargo_process("build").cwd(&path),
                 execs().with_status(0));
     assert_that(&paths::root().join(&format!("foo/target/debug/foo{}",
                                              env::consts::EXE_SUFFIX)),
@@ -51,8 +48,7 @@ test!(simple_bin {
 
 fn bin_already_exists(explicit: bool, rellocation: &str) {
     let path = paths::root().join("foo");
-    fs::create_dir(&path).ok();
-    fs::create_dir(&path.join("src")).ok();
+    fs::create_dir_all(&path.join("src")).unwrap();
     
     let sourcefile_path = path.join(rellocation);
     
@@ -80,7 +76,7 @@ fn bin_already_exists(explicit: bool, rellocation: &str) {
     File::open(&sourcefile_path).unwrap().read_to_string(&mut contents).unwrap();
     assert!(contents.contains(r#"Hello, world 2!"#));
 
-    assert_that(cargo_process("build").cwd(&paths::root().join("foo")),
+    assert_that(cargo_process("build").cwd(&path),
                 execs().with_status(0));
     assert_that(&paths::root().join(&format!("foo/target/debug/foo{}",
                                              env::consts::EXE_SUFFIX)),
@@ -113,8 +109,7 @@ test!(bin_already_exists_implicit_namesrc {
 
 test!(confused_by_multiple_lib_files {
     let path = paths::root().join("foo");
-    fs::create_dir(&path).ok();
-    fs::create_dir(&path.join("src")).ok();
+    fs::create_dir_all(&path.join("src")).unwrap();
     
     let sourcefile_path1 = path.join("src/lib.rs");
     
@@ -142,7 +137,7 @@ test!(confused_by_multiple_lib_files {
 
 test!(multibin_project_name_clash {
     let path = paths::root().join("foo");
-    fs::create_dir(&path).ok();
+    fs::create_dir(&path).unwrap();
     
     let sourcefile_path1 = path.join("foo.rs");
     
@@ -165,15 +160,11 @@ test!(multibin_project_name_clash {
                 execs().with_status(101));
                 
     assert_that(&paths::root().join("foo/Cargo.toml"), is_not(existing_file()));
-    //assert_that(cargo_process("build").cwd(&paths::root().join("foo")),
-    //            execs().with_status(0));
-    
 });
 
 fn lib_already_exists(rellocation: &str) {
     let path = paths::root().join("foo");
-    fs::create_dir(&path).ok();
-    fs::create_dir(&path.join("src")).ok();
+    fs::create_dir_all(&path.join("src")).unwrap();
     
     let sourcefile_path = path.join(rellocation);
     
@@ -193,7 +184,7 @@ fn lib_already_exists(rellocation: &str) {
     File::open(&sourcefile_path).unwrap().read_to_string(&mut contents).unwrap();
     assert!(contents.contains(r#"pub fn qqq() {}"#));
 
-    assert_that(cargo_process("build").cwd(&paths::root().join("foo")),
+    assert_that(cargo_process("build").cwd(&path),
                 execs().with_status(0));
 }
 
@@ -215,12 +206,12 @@ test!(simple_git {
     assert_that(&paths::root().join(".git"), existing_dir());
     assert_that(&paths::root().join(".gitignore"), existing_file());
 
-    assert_that(cargo_process("build").cwd(&paths::root().join(".")),
+    assert_that(cargo_process("build"),
                 execs().with_status(0));
 });
 
 test!(git_autodetect {
-    fs::create_dir(&paths::root().join(".git")).ok();
+    fs::create_dir(&paths::root().join(".git")).unwrap();
     
     assert_that(cargo_process("init")
                                     .env("USER", "foo"),
@@ -232,13 +223,13 @@ test!(git_autodetect {
     assert_that(&paths::root().join(".git"), existing_dir());
     assert_that(&paths::root().join(".gitignore"), existing_file());
 
-    assert_that(cargo_process("build").cwd(&paths::root().join(".")),
+    assert_that(cargo_process("build"),
                 execs().with_status(0));
 });
 
 
 test!(mercurial_autodetect {
-    fs::create_dir(&paths::root().join(".hg")).ok();
+    fs::create_dir(&paths::root().join(".hg")).unwrap();
     
     assert_that(cargo_process("init")
                                     .env("USER", "foo"),
@@ -250,12 +241,12 @@ test!(mercurial_autodetect {
     assert_that(&paths::root().join(".git"), is_not(existing_dir()));
     assert_that(&paths::root().join(".hgignore"), existing_file());
 
-    assert_that(cargo_process("build").cwd(&paths::root().join(".")),
+    assert_that(cargo_process("build"),
                 execs().with_status(0));
 });
 
 test!(gitignore_appended_not_replaced {
-    fs::create_dir(&paths::root().join(".git")).ok();
+    fs::create_dir(&paths::root().join(".git")).unwrap();
     
     File::create(&paths::root().join(".gitignore")).unwrap().write_all(b"qqqqqq\n").unwrap();
     
@@ -271,9 +262,9 @@ test!(gitignore_appended_not_replaced {
     
     let mut contents = String::new();
     File::open(&paths::root().join(".gitignore")).unwrap().read_to_string(&mut contents).unwrap();
-    assert!(contents.contains(r#"qqqqq"#));
+    assert!(contents.contains(r#"qqqqqq"#));
 
-    assert_that(cargo_process("build").cwd(&paths::root().join(".")),
+    assert_that(cargo_process("build"),
                 execs().with_status(0));
 });
 
