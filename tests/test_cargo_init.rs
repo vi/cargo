@@ -296,7 +296,7 @@ Usage:
 "));
 });
 
-
+#[cfg(not(windows))]
 test!(no_filename {
     assert_that(cargo_process("init").arg("/"),
                 execs().with_status(101)
