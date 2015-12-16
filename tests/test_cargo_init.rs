@@ -223,6 +223,19 @@ test!(auto_git {
     assert_that(&foo.join(".gitignore"), existing_file());
 });
 
+test!(invalid_dir_name {
+    let foo = &paths::root().join("foo.bar");
+    fs::create_dir_all(&foo).unwrap();
+    assert_that(cargo_process("init").cwd(foo.clone())
+                                     .env("USER", "foo"),
+                execs().with_status(101).with_stderr("\
+Invalid character `.` in crate name: `foo.bar`
+use --name to override crate name
+"));
+
+    assert_that(&foo.join("Cargo.toml"), is_not(existing_file()));
+});
+
 test!(git_autodetect {
     fs::create_dir(&paths::root().join(".git")).unwrap();
     

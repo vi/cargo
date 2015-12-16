@@ -91,7 +91,9 @@ fn check_name(name: &str) -> CargoResult<()> {
     for c in name.chars() {
         if c.is_alphanumeric() { continue }
         if c == '_' || c == '-' { continue }
-        bail!("Invalid character `{}` in crate name: `{}`", c, name)
+        bail!("Invalid character `{}` in crate name: `{}`
+               use --name to override crate name",
+              c, name)
     }
     Ok(())
 }
