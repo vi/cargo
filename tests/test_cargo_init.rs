@@ -1,7 +1,7 @@
 use std::fs::{self, File};
 use std::io::prelude::*;
 use std::env;
-
+use tempdir::TempDir;
 use support::{execs, paths, cargo_dir};
 use hamcrest::{assert_that, existing_file, existing_dir, is_not};
 
@@ -52,11 +52,13 @@ fn bin_already_exists(explicit: bool, rellocation: &str) {
     
     let sourcefile_path = path.join(rellocation);
     
-    File::create(&sourcefile_path).unwrap().write_all(br#"
+    let content = br#"
         fn main() {
             println!("Hello, world 2!");
         }
-    "#).unwrap();
+    "#;
+    
+    File::create(&sourcefile_path).unwrap().write_all(content).unwrap();
     
     if explicit {
         assert_that(cargo_process("init").arg("--bin").arg("--vcs").arg("none")
@@ -72,9 +74,9 @@ fn bin_already_exists(explicit: bool, rellocation: &str) {
     assert_that(&paths::root().join("foo/src/lib.rs"), is_not(existing_file()));
     
     // Check that our file is not overwritten
-    let mut contents = String::new();
-    File::open(&sourcefile_path).unwrap().read_to_string(&mut contents).unwrap();
-    assert!(contents.contains(r#"Hello, world 2!"#));
+    let mut new_content = Vec::new();
+    File::open(&sourcefile_path).unwrap().read_to_end(&mut new_content).unwrap();
+    assert_eq!(Vec::from(content as &[u8]), new_content);
 }
 
 test!(bin_already_exists_explicit {
@@ -123,7 +125,9 @@ test!(confused_by_multiple_lib_files {
     
     assert_that(cargo_process("init").arg("--vcs").arg("none")
                                     .env("USER", "foo").cwd(&path),
-                execs().with_status(101));
+                execs().with_status(101).with_stderr("\
+cannot have a project with multiple libraries, found both `src/lib.rs` and `lib.rs`
+"));
     
     assert_that(&paths::root().join("foo/Cargo.toml"), is_not(existing_file()));
 });
@@ -151,7 +155,12 @@ test!(multibin_project_name_clash {
     
     assert_that(cargo_process("init").arg("--vcs").arg("none")
                                     .env("USER", "foo").cwd(&path),
-                execs().with_status(101));
+                execs().with_status(101).with_stderr("\
+multiple possible binary sources found:
+  main.rs
+  foo.rs
+cannot automatically generate Cargo.toml as the main target would be ambiguous
+"));
                 
     assert_that(&paths::root().join("foo/Cargo.toml"), is_not(existing_file()));
 });
@@ -162,9 +171,11 @@ fn lib_already_exists(rellocation: &str) {
     
     let sourcefile_path = path.join(rellocation);
     
-    File::create(&sourcefile_path).unwrap().write_all(br#"
+    let content = br#"
         pub fn qqq() {}
-    "#).unwrap();
+    "#;
+    
+    File::create(&sourcefile_path).unwrap().write_all(content).unwrap();
     
     assert_that(cargo_process("init").arg("--vcs").arg("none")
                                     .env("USER", "foo").cwd(&path),
@@ -174,9 +185,9 @@ fn lib_already_exists(rellocation: &str) {
     assert_that(&paths::root().join("foo/src/main.rs"), is_not(existing_file()));
     
     // Check that our file is not overwritten
-    let mut contents = String::new();
-    File::open(&sourcefile_path).unwrap().read_to_string(&mut contents).unwrap();
-    assert!(contents.contains(r#"pub fn qqq() {}"#));
+    let mut new_content = Vec::new();
+    File::open(&sourcefile_path).unwrap().read_to_end(&mut new_content).unwrap();
+    assert_eq!(Vec::from(content as &[u8]), new_content);
 }
 
 test!(lib_already_exists_src {
@@ -196,6 +207,20 @@ test!(simple_git {
     assert_that(&paths::root().join("src/lib.rs"), existing_file());
     assert_that(&paths::root().join(".git"), existing_dir());
     assert_that(&paths::root().join(".gitignore"), existing_file());
+});
+
+test!(auto_git {
+    let td = TempDir::new("cargo").unwrap();
+    let foo = &td.path().join("foo");
+    fs::create_dir_all(&foo).unwrap();
+    assert_that(cargo_process("init").cwd(foo.clone())
+                                     .env("USER", "foo"),
+                execs().with_status(0));
+
+    assert_that(&foo.join("Cargo.toml"), existing_file());
+    assert_that(&foo.join("src/lib.rs"), existing_file());
+    assert_that(&foo.join(".git"), existing_dir());
+    assert_that(&foo.join(".gitignore"), existing_file());
 });
 
 test!(git_autodetect {
