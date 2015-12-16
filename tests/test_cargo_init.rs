@@ -75,12 +75,6 @@ fn bin_already_exists(explicit: bool, rellocation: &str) {
     let mut contents = String::new();
     File::open(&sourcefile_path).unwrap().read_to_string(&mut contents).unwrap();
     assert!(contents.contains(r#"Hello, world 2!"#));
-
-    assert_that(cargo_process("build").cwd(&path),
-                execs().with_status(0));
-    assert_that(&paths::root().join(&format!("foo/target/debug/foo{}",
-                                             env::consts::EXE_SUFFIX)),
-                existing_file());
 }
 
 test!(bin_already_exists_explicit {
@@ -183,9 +177,6 @@ fn lib_already_exists(rellocation: &str) {
     let mut contents = String::new();
     File::open(&sourcefile_path).unwrap().read_to_string(&mut contents).unwrap();
     assert!(contents.contains(r#"pub fn qqq() {}"#));
-
-    assert_that(cargo_process("build").cwd(&path),
-                execs().with_status(0));
 }
 
 test!(lib_already_exists_src {
@@ -205,9 +196,6 @@ test!(simple_git {
     assert_that(&paths::root().join("src/lib.rs"), existing_file());
     assert_that(&paths::root().join(".git"), existing_dir());
     assert_that(&paths::root().join(".gitignore"), existing_file());
-
-    assert_that(cargo_process("build"),
-                execs().with_status(0));
 });
 
 test!(git_autodetect {
@@ -222,9 +210,6 @@ test!(git_autodetect {
     assert_that(&paths::root().join("src/lib.rs"), existing_file());
     assert_that(&paths::root().join(".git"), existing_dir());
     assert_that(&paths::root().join(".gitignore"), existing_file());
-
-    assert_that(cargo_process("build"),
-                execs().with_status(0));
 });
 
 
@@ -240,9 +225,6 @@ test!(mercurial_autodetect {
     assert_that(&paths::root().join("src/lib.rs"), existing_file());
     assert_that(&paths::root().join(".git"), is_not(existing_dir()));
     assert_that(&paths::root().join(".hgignore"), existing_file());
-
-    assert_that(cargo_process("build"),
-                execs().with_status(0));
 });
 
 test!(gitignore_appended_not_replaced {
@@ -263,9 +245,6 @@ test!(gitignore_appended_not_replaced {
     let mut contents = String::new();
     File::open(&paths::root().join(".gitignore")).unwrap().read_to_string(&mut contents).unwrap();
     assert!(contents.contains(r#"qqqqqq"#));
-
-    assert_that(cargo_process("build"),
-                execs().with_status(0));
 });
 
 test!(with_argument {
