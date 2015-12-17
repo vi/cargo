@@ -91,7 +91,7 @@ fn check_name(name: &str) -> CargoResult<()> {
     for c in name.chars() {
         if c.is_alphanumeric() { continue }
         if c == '_' || c == '-' { continue }
-        bail!("Invalid character `{}` in crate name: `{}`
+        bail!("Invalid character `{}` in crate name: `{}`\n\
                use --name to override crate name",
               c, name)
     }
@@ -236,7 +236,7 @@ pub fn init(opts: NewOptions, config: &Config) -> CargoResult<()> {
     let cargotoml_path = path.join("Cargo.toml");
     if fs::metadata(&cargotoml_path).is_ok() {
         bail!("destination `{}` already exists",
-                                 cargotoml_path.display())
+              cargotoml_path.display())
     }
     
     let name = try!(get_name(&path, &opts, config));
@@ -415,7 +415,7 @@ fn it_works() {
 "
         };
     
-        if ! fs::metadata(&path_of_source_file).map(|x| x.is_file()).unwrap_or(false) {
+        if !fs::metadata(&path_of_source_file).map(|x| x.is_file()).unwrap_or(false) {
             return paths::write(&path_of_source_file, default_file_content)
         }
     }
